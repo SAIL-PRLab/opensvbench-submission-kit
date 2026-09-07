@@ -1,0 +1,14 @@
+data/
+output/
+logs/
+submissions/
+configs/full_core.env
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.pkl
+*.db
+__pycache__/
+*.pyc

@@ -1,0 +1,25 @@
+numpy
+pandas
+scipy
+scikit-learn
+soundfile
+torch
+torchaudio
+tqdm
+requests
+datasets
+huggingface_hub
+pyarrow
+textgrid
+transformers
+
+# Install only the backend packages required by your model:
+# wespeaker
+# speechbrain
+# modelscope
+# redimnet2
+
+# torchcodec is not required by the submission kit's VoxKnesset/VoxPopuli
+# preparation path because audio bytes are decoded with soundfile. If you write
+# your own scripts that use datasets.Audio(decode=True), install torchcodec in
+# that environment.
