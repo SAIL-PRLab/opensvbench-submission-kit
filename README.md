@@ -11,7 +11,7 @@ Leaderboard: <https://opensvbench.xyz/>
 - `local/`: dataset download, placement, and preparation scripts
 - `tools/`: trial generation, embedding extraction, scoring, and checks
 - `scripts/`: entrypoints for the full core workflow
-- `resources/`: frozen trials and their SHA-256 fingerprints
+- `resources/`: frozen trial and canonical short-audio protocol resources
 - `test_prepare_dataset/`: short notes for each dataset
 
 The kit does not include audio, model weights, embedding caches, databases,
@@ -98,6 +98,13 @@ method, and prepared trial path for every core trial set.
 
 Some protocols repeat the same utterance pair. The kit writes one score for
 each unique pair; the leaderboard expands it against the frozen trial file.
+
+VoxCeleb Short and CN-Celeb Short also use frozen crop manifests under
+`resources/canonical/short_crops/`. The manifests fix the source utterance,
+start sample, length, sample rate, and decoded PCM SHA-256 for all 40,000 short
+utterances. Data preparation reuses matching files, creates missing files, and
+stops on any mismatch. Submission precheck validates these PCM fingerprints
+before cached embeddings can be reused.
 
 ## Datasets
 

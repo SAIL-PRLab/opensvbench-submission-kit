@@ -34,11 +34,11 @@ that distinction explicit.
 | `globe` | GLOBE | Accent robustness | Pinned Hugging Face train/test shards | Self-constructed | Generates pairs from the frozen 10k-utterance canonical subset; this is not an official GLOBE SV trial list. | 56,848 | `globe/prepared/trials_accent.txt` |
 | `cnceleb` | CN-Celeb | Main evaluation | Official evaluation protocol | Official protocol | Keeps the upstream CN-Celeb evaluation trial protocol. | 3,484,292 | `cnceleb/prepared/trials_cnceleb.txt` |
 | `cnceleb_genre` | CN-Celeb | Genre shift | CN-Celeb prepared evaluation pool | Self-constructed supplement | Builds same-genre and cross-genre trials from CN-Celeb metadata. | 440,000 | `cnceleb/prepared/trials_cnceleb_genre.txt` |
-| `cnceleb_short` | CN-Celeb | Short-duration | CN-Celeb prepared evaluation pool | Self-constructed supplement | Uses generated short utterances to form a duration-robustness supplement. | 546,964 | `cnceleb/prepared/trials_short_dur.txt` |
+| `cnceleb_short` | CN-Celeb | Short-duration | CN-Celeb prepared evaluation pool | Self-constructed supplement | Uses 20,000 short utterances with frozen source IDs, sample offsets, lengths, and PCM fingerprints. | 546,964 | `cnceleb/prepared/trials_short_dur.txt` |
 | `voxceleb_o` | VoxCeleb1 | Vox1-O | VoxCeleb1-O | Official protocol | Keeps the upstream VoxCeleb1-O verification protocol. | 37,611 | `voxceleb/prepared/trials_vox1_O.txt` |
 | `voxceleb_e` | VoxCeleb1 | Vox1-E | VoxCeleb1-E | Official protocol | Keeps the upstream VoxCeleb1-E verification protocol. | 579,818 | `voxceleb/prepared/trials_vox1_E.txt` |
 | `voxceleb_h` | VoxCeleb1 | Vox1-H | VoxCeleb1-H | Official protocol | Keeps the upstream VoxCeleb1-H verification protocol. | 550,894 | `voxceleb/prepared/trials_vox1_H.txt` |
-| `voxceleb_short` | VoxCeleb1 | Short-duration | VoxCeleb1 evaluation audio | Self-constructed supplement | Uses generated short utterances to form a duration-robustness supplement. | 394,724 | `voxceleb/prepared/trials_short_dur.txt` |
+| `voxceleb_short` | VoxCeleb1 | Short-duration | VoxCeleb1 evaluation audio | Self-constructed supplement | Uses 20,000 short utterances with frozen source IDs, sample offsets, lengths, and PCM fingerprints. | 394,724 | `voxceleb/prepared/trials_short_dur.txt` |
 | `speaker3d_device` | 3D-Speaker | Cross-device | 3D-Speaker device trial file | Official protocol | Keeps the upstream cross-device trial file. | 180,000 | `3dspeaker/prepared/trials_speaker3d_device.txt` |
 | `speaker3d_distance` | 3D-Speaker | Cross-distance | 3D-Speaker distance trial file | Official protocol | Keeps the upstream cross-distance trial file. | 175,163 | `3dspeaker/prepared/trials_speaker3d_distance.txt` |
 | `speaker3d_dialect` | 3D-Speaker | Cross-dialect | 3D-Speaker dialect trial file | Official protocol | Keeps the upstream cross-dialect trial file. | 180,000 | `3dspeaker/prepared/trials_speaker3d_dialect.txt` |
@@ -68,3 +68,7 @@ that distinction explicit.
 
 For dataset access, licensing, and citation requirements, see
 `DATASET_ACCESS_MATRIX.md` and the dataset notes under `test_prepare_dataset/`.
+
+The short-audio manifests hash decoded mono signed 16-bit PCM samples rather
+than WAV container bytes. This keeps the evaluated waveform fixed without
+depending on file-header differences between audio-library versions.
