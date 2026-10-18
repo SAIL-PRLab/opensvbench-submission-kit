@@ -195,9 +195,9 @@ fi
 # Stage 19: Cut Short Utterances (VoxCeleb + CN-Celeb)
 ########################################
 
-# Stage 19: VAD + duration-bucketed cutting for VoxCeleb and CN-Celeb
+# Stage 19: frozen duration-bucketed cutting for VoxCeleb and CN-Celeb
 if [ ${stage} -le 19 ] && [ ${stop_stage} -ge 19 ]; then
-  echo "=== Stage 19: Short Utterance Cutting (VAD + 0.5s/1s/2s/3s buckets) ==="
+  echo "=== Stage 19: Canonical Short Utterance Cutting (0.5s/1s/2s/3s buckets) ==="
 
   for ds_tag in voxceleb cnceleb; do
     prep_dir=${data}/${ds_tag}/prepared
@@ -208,33 +208,10 @@ if [ ${stage} -le 19 ] && [ ${stop_stage} -ge 19 ]; then
     fi
 
     echo "  Processing ${ds_tag} ..."
-    mkdir -p "${prep_dir}/short_utts"
-
-    short_scps=()
-    for dur in 0.5 1 2 3; do
-      # python one-liner to get the same dur_str as the Python script
-      dur_str=$(python3 -c "d=float('${dur}'); print(f'{int(d)}s' if d==int(d) else f'{d}s')")
-      out_dir="${prep_dir}/short_utts/dur_${dur_str}"
-      out_scp="${prep_dir}/wav_short_dur_${dur_str}.scp"
-
-      if [ ! -f "${out_scp}" ]; then
-        echo "    Cutting dur=${dur_str} for ${ds_tag} ..."
-        python3 tools/cut_short_utterances.py \
-          --wav-scp    "${prep_dir}/wav.scp" \
-          --utt2spk    "${prep_dir}/utt2spk" \
-          --output-dir "${out_dir}" \
-          --target-dur  ${dur} \
-          --output-scp  "${out_scp}" \
-          --max-utts    5000 \
-          --nj ${nj}
-      else
-        echo "    [Skip] ${out_scp} already exists"
-      fi
-      short_scps+=("${out_scp}")
-    done
-
-    # Merge all per-duration scps into wav_short.scp
-    cat "${short_scps[@]}" > "${prep_dir}/wav_short.scp"
+    python3 tools/canonical_short_crops.py materialize \
+      --data "${data}" \
+      --dataset "${ds_tag}" \
+      --nj "${nj}"
     echo "  ${ds_tag}: wav_short.scp created ($(wc -l < "${prep_dir}/wav_short.scp") entries)"
 
     cp "${prep_dir}/wav.scp" "${prep_dir}/wav_all.scp"

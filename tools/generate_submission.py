@@ -30,6 +30,12 @@ from tools.benchmark_catalog import (
     iter_scenarios,
     scenario_by_id,
 )
+from tools.canonical_short_crops import (
+    SHORT_SCENARIOS,
+    ShortCropProtocolError,
+    protocol_for_dataset,
+    verify_prepared,
+)
 from tools.metric_aggregation import scenario_macro_metrics
 from tools.scoring_utils import (
     load_trials,
@@ -163,6 +169,63 @@ def save_embedding_cache(emb_file: Path, embeddings: dict) -> None:
     os.replace(tmp_path, emb_file)
 
 
+def cache_protocol_path(emb_file: Path) -> Path:
+    return emb_file.with_suffix(emb_file.suffix + ".protocol.json")
+
+
+def load_cache_protocol(emb_file: Path) -> dict:
+    path = cache_protocol_path(emb_file)
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def save_cache_protocol(emb_file: Path, protocol: dict) -> None:
+    path = cache_protocol_path(emb_file)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    payload = {
+        "schema_version": 1,
+        "dataset_id": protocol["dataset_id"],
+        "manifest_sha256": protocol["manifest_sha256"],
+        "short_utterance_count": len(protocol["utterance_ids"]),
+    }
+    tmp_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(tmp_path, path)
+
+
+def invalidate_short_embedding_cache(emb_file: Path, protocol: dict) -> int:
+    cached_protocol = load_cache_protocol(emb_file)
+    if cached_protocol.get("manifest_sha256") == protocol["manifest_sha256"]:
+        return 0
+    cached_embeddings = load_embedding_cache(emb_file)
+    stale_ids = set(cached_embeddings) & protocol["utterance_ids"]
+    for utt_id in stale_ids:
+        del cached_embeddings[utt_id]
+    if stale_ids:
+        save_embedding_cache(emb_file, cached_embeddings)
+    return len(stale_ids)
+
+
+def short_protocols_for_specs(specs: list, data_root: Path) -> dict[Path, dict]:
+    protocols = {}
+    for spec in specs:
+        dataset_id = SHORT_SCENARIOS.get(spec.scenario_id)
+        if dataset_id is None:
+            continue
+        manifest, digest, utterance_ids = protocol_for_dataset(dataset_id)
+        protocols[spec.prep_dir(data_root)] = {
+            "dataset_id": dataset_id,
+            "manifest": str(manifest),
+            "manifest_sha256": digest,
+            "utterance_ids": utterance_ids,
+        }
+    return protocols
+
+
 def collect_required_utts(specs: list, data_root: Path) -> dict[Path, set[str]]:
     prep_to_required = defaultdict(set)
     for spec in specs:
@@ -192,6 +255,20 @@ def write_filtered_wav_scp(
 
 
 def precheck_scenarios(specs: list, data_root: Path) -> tuple[dict, list, list]:
+    short_reports = {}
+    short_failures = {}
+    for dataset_id in sorted(
+        {SHORT_SCENARIOS[spec.scenario_id] for spec in specs if spec.scenario_id in SHORT_SCENARIOS}
+    ):
+        manifest, _, _ = protocol_for_dataset(dataset_id)
+        try:
+            short_reports[dataset_id] = verify_prepared(
+                data_root / dataset_id / "prepared",
+                manifest,
+            )
+        except (FileNotFoundError, ValueError, ShortCropProtocolError) as exc:
+            short_failures[dataset_id] = str(exc)
+
     ready_specs = []
     missing_entries = []
     checked_entries = []
@@ -207,6 +284,9 @@ def precheck_scenarios(specs: list, data_root: Path) -> tuple[dict, list, list]:
             issues.append(f"missing trial file: {trial_path}")
         if wav_scp is None:
             issues.append(f"missing wav.scp or wav_all.scp under: {prep_dir}")
+        short_dataset_id = SHORT_SCENARIOS.get(spec.scenario_id)
+        if short_dataset_id in short_failures:
+            issues.append(short_failures[short_dataset_id])
 
         entry = {
             "scenario_id": spec.scenario_id,
@@ -233,6 +313,8 @@ def precheck_scenarios(specs: list, data_root: Path) -> tuple[dict, list, list]:
         "missing_scenario_count": len(missing_entries),
         "ready_scenario_ids": [spec.scenario_id for spec in ready_specs],
         "missing_scenario_ids": [item["scenario_id"] for item in missing_entries],
+        "canonical_short_crops": short_reports,
+        "canonical_short_crop_failures": short_failures,
         "scenarios": checked_entries,
     }
     return report, ready_specs, missing_entries
@@ -269,6 +351,7 @@ def ensure_embeddings(
     extract_waveform_cmvn: str = "none",
     extract_max_chunk_seconds: float = 20.0,
     speechbrain_normalize: str = "auto",
+    short_protocol: dict | None = None,
 ) -> Path:
     model_id = os.path.basename(model_name.rstrip("/"))
     wav_scp = resolve_wav_scp(prep_dir)
@@ -278,6 +361,18 @@ def ensure_embeddings(
     emb_file = prep_dir / f"{emb_suffix}_{model_id}.pkl"
     invalid_cache = emb_file.is_file() and emb_file.stat().st_size <= 16
     extract_subset = required_utts
+
+    if emb_file.is_file() and short_protocol and not force_extract and not invalid_cache:
+        try:
+            stale_count = invalidate_short_embedding_cache(emb_file, short_protocol)
+        except Exception:
+            invalid_cache = True
+        else:
+            if stale_count:
+                print(
+                    f"[Submission] Invalidated {stale_count} stale canonical short embeddings "
+                    f"for {short_protocol['dataset_id']}."
+                )
 
     if emb_file.is_file() and not force_extract and not invalid_cache and required_utts:
         try:
@@ -297,8 +392,10 @@ def ensure_embeddings(
 
     if force_extract or not emb_file.is_file() or invalid_cache or extract_subset is not None:
         if force_extract and emb_file.is_file():
-            # Ensure a true recomputation instead of resuming stale embeddings.
             emb_file.unlink()
+            protocol_path = cache_protocol_path(emb_file)
+            if protocol_path.exists():
+                protocol_path.unlink()
             invalid_cache = False
         cmd = [
             sys.executable,
@@ -340,6 +437,8 @@ def ensure_embeddings(
                 print(f"[Submission] Cached embeddings look empty/corrupt, regenerating: {emb_file}")
             print("[Submission] Extracting embeddings:", " ".join(cmd))
             subprocess.run(cmd, check=True, cwd=str(REPO_ROOT))
+            if short_protocol:
+                save_cache_protocol(emb_file, short_protocol)
         finally:
             tmpdir_ctx.cleanup()
     else:
@@ -460,6 +559,13 @@ def main():
     print_precheck_report(precheck_report)
     print(f"[Submission] Precheck report written to {precheck_path}")
 
+    if precheck_report["canonical_short_crop_failures"]:
+        failed_datasets = ", ".join(sorted(precheck_report["canonical_short_crop_failures"]))
+        raise ValueError(
+            "Canonical short-crop verification failed for: "
+            f"{failed_datasets}. See {precheck_path}"
+        )
+
     if args.precheck_only:
         raise SystemExit(0 if precheck_report["missing_scenario_count"] == 0 else 2)
 
@@ -480,6 +586,7 @@ def main():
     emb_files = {}
     loaded_embeddings = {}
     prep_required_utts = collect_required_utts(active_specs, data_root)
+    short_protocols = short_protocols_for_specs(active_specs, data_root)
 
     prep_to_specs = defaultdict(list)
     for spec in active_specs:
@@ -498,6 +605,7 @@ def main():
                 extract_waveform_cmvn=args.extract_waveform_cmvn,
                 extract_max_chunk_seconds=args.extract_max_chunk_seconds,
                 speechbrain_normalize=args.speechbrain_normalize,
+                short_protocol=short_protocols.get(prep_dir),
             )
         except Exception as exc:
             if full_core_mode:
@@ -534,6 +642,7 @@ def main():
                         extract_waveform_cmvn=args.extract_waveform_cmvn,
                         extract_max_chunk_seconds=args.extract_max_chunk_seconds,
                         speechbrain_normalize=args.speechbrain_normalize,
+                        short_protocol=short_protocols.get(prep_dir),
                     )
                     loaded_embeddings[prep_dir] = load_embedding_cache(emb_files[prep_dir])
             trials = load_trials(spec.trial_path(data_root))
@@ -635,12 +744,15 @@ def main():
             "Precheck found unavailable scenarios: " + ", ".join(precheck_report["missing_scenario_ids"])
         )
     if skipped_scenarios:
+        skipped_ids = ", ".join(sorted({item["scenario_id"] for item in skipped_scenarios}))
         warnings.append(
-            "Some scenarios were skipped during packaging: "
-            + ", ".join(sorted({item["scenario_id"] for item in skipped_scenarios}))
+            f"Some scenarios were skipped during packaging: {skipped_ids}"
         )
     if ranking_status != "complete":
-        warnings.append("This submission does not cover the full current core scenario set and is not eligible for public ranking.")
+        warnings.append(
+            "This submission does not cover the full current core scenario set "
+            "and is not eligible for public ranking."
+        )
 
     metadata = {
         "submission_name": submission_name,
@@ -717,8 +829,7 @@ def main():
             },
             indent=2,
             ensure_ascii=True,
-        )
-        + "\n"
+        ) + "\n"
     )
 
     print(f"[Submission] Zip written to {zip_path}")
