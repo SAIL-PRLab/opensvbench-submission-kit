@@ -2,11 +2,12 @@
 
 ## 0.2.2 - 2026-10-27
 
-- 将历史 10,000 条 GSC manifest 及对应的 `24c93fc5...` trial 文件提交到仓库，
-  作为唯一 canonical `gsc_short` protocol。
-- canonical GSC preparation 在写入 metadata 前校验官方压缩包、testing list、
-  manifest、源文件路径和冻结 trial 指纹。
-- 旧的随机 GSC 子集/trial 生成器仅通过显式的 `--legacy-random true` 开启。
+- Commit the historical 10,000-utterance GSC manifest and matching
+  `24c93fc5...` trial file as the sole canonical `gsc_short` protocol.
+- Make canonical GSC preparation validate the official archive, testing list,
+  manifest, source paths, and frozen trial fingerprint before writing metadata.
+- Keep the previous random GSC subset/trial generator behind the explicit
+  `--legacy-random true` opt-in.
 
 ## 0.2.1 - 2026-10-18
 
