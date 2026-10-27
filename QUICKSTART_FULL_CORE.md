@@ -46,7 +46,10 @@ placing the files, run this step again.
 ./scripts/02_prepare_full_core.sh
 ```
 
-The scripts write manifests, prepared audio, and trial files below `DATA_ROOT`.
+脚本会在 `DATA_ROOT` 下写入 manifest、prepared 音频和 trial 文件。对于 GSC，
+默认准备流程会应用仓库中提交的 canonical manifest 和 trial 文件，不会随机选择
+utterance 或重新生成 trial list。固定的源数据和资源哈希记录在
+`resources/canonical/gsc/README.md`。
 
 ## 5. Check the trials
 

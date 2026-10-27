@@ -52,6 +52,10 @@ Run the workflow in order:
 ./scripts/04_generate_submission_zip.sh
 ```
 
+GSC `gsc_short` 默认使用仓库中提交的 canonical manifest 和 trial 文件。准备
+流程会校验官方压缩包，不会重新采样 utterance 或重新生成 trial。固定的哈希值
+以及仅供实验使用的 legacy 随机模式见 `resources/canonical/gsc/README.md`。
+
 Keep `DATA_ROOT` outside the kit if possible. Data preparation can require
 substantial disk space, and some datasets require an application or manual
 placement. See `DATASET_ACCESS_MATRIX.md` and `MANUAL_PLACEMENT.md`.
@@ -96,6 +100,11 @@ than editing the score CSV by hand.
 See `TRIAL_SET_GUIDE.md` for the data split, protocol source, construction
 method, and prepared trial path for every core trial set.
 
+对于 `gsc_short`，canonical utterance 子集提交在
+`resources/canonical/gsc/manifest.tsv`，canonical 220,000 行 trial 文件提交在
+`resources/canonical/gsc/trials_short.txt`。对应的 trial SHA-256 为
+`24c93fc5799f2a24afa603eaf410dfc24e9bd70ec896e41e2877e551bacf0229`。
+
 Some protocols repeat the same utterance pair. The kit writes one score for
 each unique pair; the leaderboard expands it against the frozen trial file.
 
@@ -113,6 +122,8 @@ audio. Read `DATASET_ACCESS_MATRIX.md` before running the scripts and follow
 each dataset's license, access restrictions, and citation requirements. GLOBE
 uses the fixed manifest, shard list, and trial file under
 `resources/canonical/globe/` so that users run the same protocol.
+GSC 同样使用 `resources/canonical/gsc/` 下的固定 manifest 和 trial 文件；源音频
+仍需从上游 Speech Commands 压缩包下载。
 
 ## License
 
